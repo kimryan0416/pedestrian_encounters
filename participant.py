@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import argparse
 
 from RecordMuse.processing import convert, filter, normalize
@@ -7,6 +8,7 @@ import offsets
 
 def process_participant(
         pdir:str, 
+        pid:str,
         convert_eeg:bool, 
         filter_eeg:bool, 
         calculate_offsets:bool,
@@ -60,12 +62,20 @@ def process_participant(
             start_buffer=5000, 
             end_buffer=500
         )
+    # Reading offset src, checking if it has PID as a column, then modifying if needed
+    assert offsets_src is not None, 'Invalid participant!'
+    offsets_df = pd.read_csv(offsets_src)
+    if 'pid' not in offsets_df.columns:
+        print("\033[36mModifying offsets with PID\033[0m")
+        offsets_df['pid'] = pid
+        offsets_df.to_csv(offsets_src, index=False)
     print("- \033[31mOffsets:\033[0m", offsets_src)
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Given a participant directory, automate their operation to reduce the need to run commands in the terminal window.")
     parser.add_argument('participant_dir', help="Relative path to the directory of the participant data.", type=str)
+    parser.add_argument('participant_name', help="The participant's unique ID", type=str)
     parser.add_argument('-c', '--convert', help="Convert the EEG data into a BlueMuse-compatible format? Please use if using EEG data directly read through other LSL streaming apps like Mind Monitor", action="store_true")
     parser.add_argument('-f', '--filter', help="Filter the EEG data to remove 60Hz and bandpass", action="store_true")
     parser.add_argument('-o', '--offsets', help="FORCE the system to calculate offsets.", action='store_true')
@@ -75,6 +85,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     process_participant(
         args.participant_dir, 
+        args.participant_name,
         args.convert, 
         args.filter,
         args.offsets,
