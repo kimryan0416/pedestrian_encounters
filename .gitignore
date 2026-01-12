@@ -1,0 +1,9 @@
+# Virtual environments
+.venv/*
+**/__pycache__/
+
+# Samples
+samples/*
+
+# Mac-specific
+**/*.DS_Store
