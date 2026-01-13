@@ -18,7 +18,7 @@ def natural_sorting_by_key(series: pd.Series) -> pd.Series:
         return tuple(convert(c) for c in re.split(r'(\d+)', str(s)))
     return series.map(alphanum_key)
 
-def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:str='boxplot'):
+def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', trial_hue:bool=False, method:str='boxplot', show:bool=False):
 
     # Find all `offset_src` files in `src_dir`
     offset_dfs = []
@@ -30,6 +30,11 @@ def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:st
     df = pd.concat(offset_dfs, ignore_index=True)
     df = df.sort_values(by=["pid", "trial_id", "overlap_counter"], key=natural_sorting_by_key)
     
+    # Determine hues
+    hue, hue_order = 'trial_id',  sorted(df['trial_id'].unique())
+    if not trial_hue:
+        hue, hue_order = None, None
+
     # Generate the plot
     plt.figure(figsize=(2*len(df.pid.unique()), 5))  # scale width with N
     if method == 'boxplot':
@@ -37,7 +42,8 @@ def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:st
             data=df,
             x="pid",   # horizontal orientation: y is category, x is value
             y="offset_eeg-gaze",
-            #hue='trial_id',
+            hue=hue,
+            hue_order=hue_order,
             orient="v",
             showfliers=False,  # hide outlier dots (since we'll show raw data)
             width=0.6,
@@ -48,11 +54,16 @@ def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:st
             df.groupby("pid")["offset_eeg-gaze"]
             .median()
         )
+        pid_means = (
+            df.groupby("pid")["offset_eeg-gaze"]
+            .mean()
+        )
         sns.violinplot(
             data=df,
             x="pid",
             y="offset_eeg-gaze",
-            #hue='trial_id',
+            hue=hue,
+            hue_order=hue_order,
             orient="v",
             inner=None,
             cut=0,
@@ -75,12 +86,23 @@ def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:st
                 linewidth=2,
                 alpha=0.8
             )
+        for pid, mean in pid_means.items():
+            x = pid_to_x[str(pid)]
+            ax.hlines(
+                y=mean,
+                xmin=x - half_width,
+                xmax=x + half_width,
+                colors="red",
+                linewidth=2,
+                alpha=0.8
+            )
     # Overlay jittered raw points
     ax = sns.stripplot(
         data=df,
         x="pid",
         y="offset_eeg-gaze",
-        #hue='trial_id',
+        hue=hue,
+        hue_order=hue_order,
         dodge=True,
         orient="v",
         alpha=1.0,
@@ -95,13 +117,15 @@ def analyze_offsets(src_dir:str, offset_src:str, ts_col:str='unix_ms', method:st
     plt.xlabel("Participant ID")
     plt.ylabel("Offset (EEG - VR, ms)")
     # Add lines to indicate the 0-diff line
-    #plt.axhline(y=0, c='black', alpha=0.5)
-    plt.axhline(y=df['offset_eeg-gaze'].median(), c='blue', alpha=0.25)
+    plt.axhline(y=0, c='black', alpha=0.25)
+    #plt.axhline(y=df['offset_eeg-gaze'].median(), c='blue', alpha=0.25)
     # Avoid duplicate legends from boxplot + stripplot
     handles, labels = plt.gca().get_legend_handles_labels()
     # Adjust the layout
     plt.tight_layout()
     plt.savefig(os.path.join(src_dir, 'offsets.png'), bbox_inches='tight', dpi=300)
+    if show:    plt.show()
+    else:       plt.close()
     return df
 
 if __name__ == "__main__":
@@ -110,11 +134,15 @@ if __name__ == "__main__":
     parser.add_argument('src_dir', help="The relative path to where all participant folders are stored", type=str)
     parser.add_argument('-os', '--offset_src', help="The expected filename for offset files", type=str, default='offsets.csv')
     parser.add_argument('-tc', '--timestamp_column', help="The timestamp column name", type=str, default="unix_ms")
+    parser.add_argument('-th', '--trial_hue', help="Should we hue based on `trial_id`?", action='store_true')
     parser.add_argument('-m', '--method', help="What plot type should we use?", type=str, choices=['boxplot', 'violin'], default='boxplot')
+    parser.add_argument('-s', '--show', help='If toggled, will show the offset plot on screen prior to closing', action='store_true')
     args = parser.parse_args()
     analyze_offsets(
         args.src_dir,
         args.offset_src,
         ts_col = args.timestamp_column,
-        method = args.method
+        trial_hue = args.trial_hue,
+        method = args.method,
+        show = args.show
     )

@@ -202,6 +202,8 @@ class PointSelector:
         self.fig.canvas.mpl_disconnect(self.mid)
         plt.close(self.fig)
 
+def smooth_signal(x, window_length, polyorder, mode):
+    return savgol_filter(x, window_length=window_length, polyorder=polyorder, mode=mode)
 
 def calculate_offsets(
         src_dir:str, 
@@ -308,6 +310,7 @@ if __name__ == "__main__":
     parser.add_argument('-tc', '--timestamp_column', help='The timestamp column of choice', type=str, default='unix_ms')
     parser.add_argument('-sb', '--start_buffer', help='The amount of time removed from the start of each calibration stage', default=5000)
     parser.add_argument('-eb', '--end_buffer', help="The amount of time removed from the end of each calibration stage.", default=500)
+    parser.add_argument('-s', '--smooth', help="If toggled, will attempt to smooth based on in-built parameters.", action="store_true")
     parser.add_argument('-m', '--method', help="Manual, automated, or both modes.", type=str, choices=["manual", "automated", "both"], default="manual")
     args = parser.parse_args()
     start_buffer = float(args.start_buffer)
