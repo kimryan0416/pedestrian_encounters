@@ -209,7 +209,8 @@ def calculate_offsets(
         src_dir:str, 
         trial_src:str, 
         eye_src:str, 
-        eeg_src, 
+        eeg_src:str,
+        blinks_src:str=None, 
         ts_col:str='unix_ms', 
         start_buffer:float = 5000,
         end_buffer:float = 500,
@@ -249,7 +250,10 @@ def calculate_offsets(
         data = ((gx, gy, 'Gaze Y', 'red'), (ex, ey, 'TP9', 'blue'))
         # Vertical lines represent when the overlaps occur during the calibration stage
         vlines = [(row['unix_ms'], f"Start {row['overlap_counter']}") for row_index, row in overlap_rows.iterrows()]
-        
+        if blinks_src is not None:
+            blinks = pd.read_csv(blinks_src)
+            blink_rows = blinks[blinks['unix_ms'].between(start_unix_ms, end_unix_ms)]
+            vlines += [(row['unix_ms'], 'Blink') for row_index, row in blink_rows.iterrows()]
         # Iterate through overlaps
         overlaps = []
         eegs = []

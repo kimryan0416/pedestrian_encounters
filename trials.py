@@ -30,7 +30,7 @@ _CALIBRATION_FILES = [
 ]
 
 def find_files_by_pattern(src_dir:str, pattern:str="*.csv"):
-    return glob.glob(os.path.join(src_dir, pattern))
+    return sorted(glob.glob(os.path.join(src_dir, pattern)))
 
 def read_calibration_file(_F:str, correction:bool=True):
     df = pd.read_csv(_F)                            # Read the file
@@ -99,13 +99,21 @@ def identify_trials(
     # Find and plot calibration files
     calibrations = [(f, read_calibration_file(f)) for f in find_files_by_pattern(src_dir, "calibration_*.csv")]
     plot_calibrations(eye[ts_col], start_time, end_time, ts_col, calibrations)
+    print(calibrations)
 
     # Get trials, derive end unix ms and frame from calibration_test_7.csv
     trials = eye[eye['event'].isin(_TRIAL_NAMES)]
     trials = trials[['event', 'unix_ms', 'frame']].rename(columns={'event':'trial_name', 'unix_ms':'start_unix_ms', 'frame':'start_frame'})
     trials = trials.sort_values('start_unix_ms')
-    trials['end_unix_ms'] = trials['start_unix_ms'].shift(-1)
-    trials['end_frame'] = trials['start_frame'].shift(-1)
+    calibration_start_timestamps = ([c[1].iloc[0]['unix_ms'] for c in calibrations][-6:])
+    calibration_start_timestamps.sort()
+    calibration_start_frames = sorted([c[1].iloc[0]['frame'] for c in calibrations][-6:])
+    calibration_start_frames.sort()
+    #trials['end_unix_ms'] = trials['start_unix_ms'].shift(-1)
+    #trials['end_frame'] = trials['start_frame'].shift(-1)
+    trials['end_unix_ms'] = calibration_start_timestamps
+    trials['end_frame'] = calibration_start_frames
+    print(trials.to_string())
     # To get the last entries of `end_unix_ms` and `end_frame`, we have to look at `calibration_7.csv`
     last_cal_df = read_calibration_file(os.path.join(src_dir, 'calibration_test_7.csv'))
     last_cal_first = last_cal_df.iloc[0].to_dict()
@@ -114,6 +122,7 @@ def identify_trials(
     # then append it to our trials
     trials.at[trials.index[-1], 'end_unix_ms'] = last_cal_start
     trials.at[trials.index[-1], 'end_frame'] = last_cal_frame
+    print(trials.to_string())
     # typecast start and end frames as integer
     trials = trials.astype({"start_frame": int, "end_frame": int})
     # Cleanup: 
