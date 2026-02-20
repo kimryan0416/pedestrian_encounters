@@ -34,33 +34,37 @@ with col2:
     st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
    
     if st.button("Run Demo Visualization", disabled=is_running()):
-        st.write("Start button clicked")
         st.session_state.proc = subprocess.Popen([
             sys.executable, 
             "RecordMuse/record/demo.py"
         ])
-        st.write("Spawned PID:", st.session_state.proc.pid)
+        st.rerun()
     
     if st.button("Stop Demo Visualization", disabled=not is_running()):
-        st.session_state.proc.wait(timeout=2)
         st.session_state.proc.terminate()
         st.session_state.proc = None
-    
+        st.rerun()
+        
 
 with col1:
     st.header("Recording")
     st.markdown("You can invoke this operation to actually record data using BlueMuse and your Muse device. You can toggle two separate parameters to control aspects of the recording session. For best results, follow the default settings provided.")
     st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
 
-    arg1 = st.text_input("Output directory", value="", placeholder="Leave this blank to create a datetime-stamped output directory")
+    arg1 = st.text_input("Output directory", value=None, placeholder="Leave this blank to create a datetime-stamped output directory")
     arg2 = st.number_input("Recording duration", value=600, placeholder="How long should the recording last (in seconds)?")
     arg3 = st.checkbox("Visualize streams (debugging only)", value=False)
 
     if st.button("Start Recording", disabled=is_running()):
-        st.session_state.proc = subprocess.Popen(
-            [sys.executable, "record.py", '-d', arg1, '-rd', arg2, '-v', arg3]
-        )
+        args = [ sys.executable, "RecordMuse/record/record.py"]
+        if arg1 is not None: args.extend(['-d', arg1])
+        if arg2 is not None: args.extend(['-rd', str(arg2)])
+        if arg3: args.append('-v')
+        print(args)
+        st.session_state.proc = subprocess.Popen(args)
+        st.rerun()
+
     if st.button("Stop Recording", disabled=not is_running()):
-        st.session_state.proc.wait(timeout=2)
         st.session_state.proc.terminate()  # SIGTERM
         st.session_state.proc = None
+        st.rerun()
