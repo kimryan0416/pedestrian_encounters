@@ -20,7 +20,7 @@ with col1:
     st.header("Demo")
     st.markdown("You can invoke this operation to just see if your BlueMuse system is working. It produces a set of dynamic graphs that visualize the various data channels recorded by BlueMuse. This is **purely** for visualization and debugging; it doesn't actually record.")
     if st.button("Run Demo Visualization"):
-        subprocess.Popen(["python", "RecordMuse/record/demo.py"])
+        subprocess.Popen([".venv/bin/python", "RecordMuse/record/demo.py"])
 
 with col2:
     st.header("Recording")

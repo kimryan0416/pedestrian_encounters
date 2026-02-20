@@ -2,3 +2,4 @@ seaborn
 mne
 scikit-learn
 ruptures
+streamlit
