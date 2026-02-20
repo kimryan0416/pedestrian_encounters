@@ -1,6 +1,8 @@
 import streamlit as st
 import subprocess
 import sys
+from pathlib import Path
+from utils.core import find_recording_dirs
 
 st.set_page_config(page_title="Recording EEG", page_icon="📈")
 
@@ -68,3 +70,33 @@ with col1:
         st.session_state.proc.terminate()  # SIGTERM
         st.session_state.proc = None
         st.rerun()
+
+st.divider()
+
+st.header("Pre-existing recordings")
+st.markdown("All recordings are identified with a prefix `[recording]-` to them. You can use this tool to check how many have been identified. You can also control under which root directory you want to check under, if needed.")
+
+recordings = find_recording_dirs(Path('.').resolve())
+col3, col4 = st.columns(2)
+
+with col3:
+    root_dir = st.text_input("Root directory to scan", value=".")
+with col4:
+    if st.button("Scan for recordings"):
+        root = Path(root_dir).resolve()
+        if not root.exists():
+            st.error("Directory does not exist")
+        else:
+            recordings = find_recording_dirs(root)
+
+if not recordings: 
+    st.info("No recording directories found.")
+else:
+    st.success(f"Found {len(recordings)} recording(s)")
+    for rec in recordings:
+        st.markdown(f"""
+            **📁 {rec['name']}**  
+            • Path: `{rec['relative_path']}`  
+            • Created: {rec['created'].strftime('%Y-%m-%d %H:%M:%S')}
+            """
+        )
