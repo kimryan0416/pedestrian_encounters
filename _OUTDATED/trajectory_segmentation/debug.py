@@ -1,21 +1,195 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
-from matplotlib.cm import get_cmap
-from cluster_analysis import run_dbscan, cluster_strength, compute_windowed_dbscan_time, compute_associations
+from sklearn.cluster import DBSCAN, HDBSCAN
+from collections import defaultdict
 
-def plot_speed_acceleration(speed, force, zero_crossings=None, outname:str=None):
-    fig = plt.figure(figsize=(10,5))
-    plt.plot(speed[:,1], speed[:,0], c='orange', zorder=2, label='speed')
-    plt.plot(force[:,1], force[:,0], c='blue', zorder=1, label='acceleration')
-    plt.axhline(y=0, c='black', alpha=0.75)
-    if zero_crossings is not None:
-        for zero_crossing in zero_crossings:
-            plt.axvline(x=zero_crossing, c='gray')
-    plt.legend()
-    if outname is not None:
-        plt.savefig(outname, bbox_inches='tight', dpi=300)
-    plt.show()
+def compute_windowed_dbscan(v, window_size, eps, step=None, min_samples=5):
+    if step is None:
+        step = window_size
+    results = []
+    for start in range(0, len(v) - window_size + 1, step):
+        end = start + window_size
+        idx = np.arange(start, end)
+        labels = DBSCAN(
+            eps=eps,
+            min_samples=min_samples
+        ).fit_predict(v[idx])
+        results.append({
+            "start": start,
+            "end": end,
+            "indices": idx,
+            "labels": labels
+        })
+    return results
+
+def jaccard(a, b):
+    a, b = set(a), set(b)
+    return len(a & b) / len(a | b) if a | b else 0.0
+
+def compute_associations(windows):
+    associations = {}
+
+    for i in range(len(windows) - 1):
+        wA, wB = windows[i], windows[i + 1]
+
+        for lblA in np.unique(wA["labels"]):
+            if lblA == -1:
+                continue
+            idxA = wA["indices"][wA["labels"] == lblA]
+
+            for lblB in np.unique(wB["labels"]):
+                if lblB == -1:
+                    continue
+                idxB = wB["indices"][wB["labels"] == lblB]
+
+                s = jaccard(idxA, idxB)
+                if s > 0:
+                    associations[(i, lblA, lblB)] = s
+
+    return associations
+
+def coassociation_strength(same, total, threshold=0.6):
+    edges = []
+    for key in total:
+        if same[key] / total[key] >= threshold:
+            edges.append(key)
+    return edges
+
+def extract_segments(edges, N):
+    segments = []
+    current = [0]
+
+    edge_set = set(edges)
+
+    for i in range(N - 1):
+        if (i, i + 1) in edge_set or (i + 1, i) in edge_set:
+            current.append(i + 1)
+        else:
+            segments.append(current)
+            current = [i + 1]
+
+    segments.append(current)
+    return segments
+
+def run_dbscan(v, eps, min_samples=5):
+    if len(v) == 0:
+        return np.array([])
+    return DBSCAN(eps=eps, min_samples=min_samples).fit_predict(v)
+
+def cluster_strength(idx_a, idx_b):
+    a = set(idx_a)
+    b = set(idx_b)
+    return len(a & b) / len(a | b) if a | b else 0.0
+
+def compute_windowed_dbscan_time(v, t, window_ms, eps, min_samples=5):
+    windows = []
+
+    time_windows = compute_time_windows(t, window_ms)
+
+    for (start, end) in time_windows:
+        idx = np.arange(start, end)
+
+        labels = DBSCAN(
+            eps=eps,
+            min_samples=min_samples
+        ).fit_predict(v[idx])
+
+        windows.append({
+            "indices": idx,
+            "labels": labels,
+            "t_start": t[start],
+            "t_end": t[end - 1]
+        })
+
+    return windows
+
+def compute_time_windows(t, window_ms, step_ms=None):
+    """
+    Returns a list of (start_idx, end_idx) pairs such that
+    t[start_idx:end_idx] lies inside a time window.
+    """
+    if step_ms is None:
+        step_ms = window_ms
+
+    t0 = t[0]
+    t_end = t[-1]
+
+    windows = []
+    current_start = t0
+
+    while current_start + window_ms <= t_end:
+        start_idx = np.searchsorted(t, current_start, side="left")
+        end_idx = np.searchsorted(t, current_start + window_ms, side="right")
+
+        if end_idx > start_idx:
+            windows.append((start_idx, end_idx))
+
+        current_start += step_ms
+
+    return windows
+
+# Calculate the signed turning angles across a velocity window
+def calculate_turning_angles(v, eps=1e-6):
+    speed = np.linalg.norm(v, axis=1)
+    valid = speed > eps
+
+    v_hat = np.zeros_like(v)
+    v_hat[valid] = v[valid] / speed[valid, None]
+
+    dot = np.sum(v_hat[1:] * v_hat[:-1], axis=1)
+    dot = np.clip(dot, -1.0, 1.0)
+
+    cross = (
+        v_hat[:-1, 0] * v_hat[1:, 1]
+        - v_hat[:-1, 1] * v_hat[1:, 0]
+    )
+
+    angle = np.arctan2(cross, dot)
+    angle[~(valid[1:] & valid[:-1])] = 0.0
+    return angle
+
+# Calculate the curvature energy based on turn angles and windows of time
+def calculate_curvature_energy(t, turn_angle, window_ms=500):
+    energy = np.zeros(len(t))
+    start = 0
+    for i in range(1, len(t)):
+        while t[start + 1] < t[i] - window_ms:
+            start += 1
+        energy[i] = np.sum(np.abs(turn_angle[start:i]))
+    return energy
+
+# Same as `calculate_curvature_energy`, but this time comparing both small and large time windows
+def calculate_curvature_energy_multiscale(t, turn_angle, windows_ms=(300, 1200), weights=(0.3, 0.7)):
+    """
+    Multi-scale curvature energy to capture both sharp and gradual turns.
+
+    Parameters
+    ----------
+    t : (M,) array
+        Timestamps (ms), aligned with turn_angle
+    turn_angle : (M,) or (M-1,) array
+        Signed turning angles
+    windows_ms : tuple
+        Window sizes in milliseconds
+    weights : tuple
+        Weight for each window (same length as windows_ms)
+
+    Returns
+    -------
+    energy : (M,) array
+        Combined curvature energy
+    """
+    assert len(windows_ms) == len(weights)
+
+    energies = []
+    for w in windows_ms:
+        e = calculate_curvature_energy(t, turn_angle, window_ms=w)
+        energies.append(e)
+
+    energy = np.zeros_like(energies[0])
+    for w, e in zip(weights, energies):
+        energy += w * e
+
+    return energy
 
 def segments_to_labels(n, segments):
     labels = -1 * np.ones(n, dtype=int)
@@ -23,8 +197,7 @@ def segments_to_labels(n, segments):
         labels[np.asarray(idx)] = i
     return labels
 
-def plot_velocity_over_windows(v, t, window_size=1000, segments=None):
-
+def plot_velocity_over_windows(v, t, window_size=1000, segments=None, color_map='Dark2'):
     fig, ax = plt.subplots()
     plt.subplots_adjust(bottom=0.25)
 
@@ -53,7 +226,7 @@ def plot_velocity_over_windows(v, t, window_size=1000, segments=None):
         for i, idx in enumerate(segments):
             labels[np.asarray(idx)] = i
 
-        cmap = get_cmap("tab20")
+        cmap = get_cmap(color_map)
         n_segments = len(segments)
     else:
         labels = None
@@ -107,6 +280,48 @@ def plot_velocity_over_windows(v, t, window_size=1000, segments=None):
     window_slider.on_changed(update)
     update(None)
     plt.show()
+
+# Calcualte segments from curvature energy
+def segment_by_curvature_energy(t, curvature_energy, threshold="auto", min_duration=10):
+    """
+    Segment trajectory based on directional change.
+
+    Parameters
+    ----------
+    t : (N,) array
+        Time values
+    curvature_energy : (N-1,) array
+        Windowed curvature energy
+    threshold : float or "auto"
+        Energy threshold
+    min_duration : int
+        Minimum segment length in samples
+
+    Returns
+    -------
+    segments : (N,) int
+        Segment label per sample
+    """
+    energy = np.asarray(curvature_energy)
+
+    if threshold == "auto":
+        threshold = np.mean(energy) + 1.0 * np.std(energy)
+
+    active = energy > threshold
+
+    segments = np.zeros(len(t), dtype=int)
+    seg_id = 0
+    count = 0
+
+    for i in range(1, len(t)):
+        segments[i] = seg_id
+        if active[i] and not active[i-1]:
+            if count >= min_duration:
+                seg_id += 1
+                count = 0
+        count += 1
+
+    return segments
 
 def plot_dbscan_windows_over_time(v, t):
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(10, 5))
@@ -395,3 +610,50 @@ def windowed_dbscan_inspector(v, t):
 
     recompute(None)
     plt.show()
+
+def identify_accel_threshold(force, accel_segments):
+    # `accel_segments` is just a an array of N-2 length. It maps directly to `force_time` in terms of indices.
+    # Therefore, in order to describe these segments, we need to do the following:
+    #   1. Determine the sign of each element in `accel_segment`. This can be done by majority vote of the sign of each accel row
+    #   2. For each accel segment, determine the mean (or median?) acceleration value 
+    force_min = np.min(force)
+    force_max = np.max(force)
+    force_normalized = (force - force_min) / (force_max - force_min)
+    force_segments = np.column_stack([force_normalized, accel_segments])
+    n_accel_segments = accel_segments.max() + 1   # number of groups
+    sums = np.zeros(n_accel_segments)
+    counts = np.zeros(n_accel_segments)
+    np.add.at(sums, accel_segments, force)
+    np.add.at(counts, accel_segments, 1)
+    mean_accel_segments = sums / counts[:, None]
+
+    thresholds = np.linspace(0, 1, 1000)
+    accel_means = np.abs(mean_accel_segments[:,0])
+    means = accel_means[:,None]
+    ths = thresholds[:,None]
+    above = means > thresholds
+    below = means <= thresholds
+    count_above = above.sum(axis=0)
+    count_below = below.sum(axis=0)
+    ratio = count_above / count_below
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    line, = ax.plot(thresholds, ratio, marker='o', markersize=1)
+    plt.axhline(0, linestyle='--', alpha=0.5)
+    plt.xlabel("Threshold")
+    plt.ylabel("Above vs Below imbalance")
+    plt.title("Threshold sweep")
+    cursor = mplcursors.cursor(line, hover=True)
+    @cursor.connect("add")
+    def on_add(sel):
+        x, y = sel.target
+        sel.annotation.set_text(f"Threshold = {x:.3f}\nImbalance = {y:.3f}")
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+
+

@@ -99,7 +99,6 @@ def identify_trials(
     # Find and plot calibration files
     calibrations = [(f, read_calibration_file(f)) for f in find_files_by_pattern(src_dir, "calibration_*.csv")]
     plot_calibrations(eye[ts_col], start_time, end_time, ts_col, calibrations)
-    print(calibrations)
 
     # Get trials, derive end unix ms and frame from calibration_test_7.csv
     trials = eye[eye['event'].isin(_TRIAL_NAMES)]
