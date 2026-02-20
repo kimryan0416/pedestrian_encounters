@@ -19,9 +19,8 @@ st.markdown(_DESCRIPTION)
 if "proc" not in st.session_state:
     st.session_state.proc = None
 def is_running():
-    return st.session_state.proc is not None and st.session_state.proc.poll() is None
-start_disabled = is_running()
-stop_disabled = not is_running()
+    p = st.session_state.proc
+    return p is not None and p.poll() is None
 
 # Create two columns
 col1, col2 = st.columns(2)
@@ -31,13 +30,14 @@ with col2:
     st.markdown("You can invoke this operation to just see if your BlueMuse system is working. It produces a set of dynamic graphs that visualize the various data channels recorded by BlueMuse. This is **purely** for visualization and debugging; it doesn't actually record.")
     st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
    
-    if st.button("Run Demo Visualization", disabled=start_disabled):
+    if st.button("Run Demo Visualization", disabled=is_running()):
         st.session_state.proc = subprocess.Popen([
             sys.executable, 
             "RecordMuse/record/demo.py"
         ])
     
-    if st.button("Stop Demo Visualization", disabled=stop_disabled):
+    if st.button("Stop Demo Visualization", disabled=not is_running()):
+        st.session_state.proc.wait(timeout=2)
         st.session_state.proc.terminate()
         st.session_state.proc = None
     
@@ -51,10 +51,11 @@ with col1:
     arg2 = st.number_input("Recording duration", value=600, placeholder="How long should the recording last (in seconds)?")
     arg3 = st.checkbox("Visualize streams (debugging only)", value=False)
 
-    if st.button("Start Recording", disabled=start_disabled):
+    if st.button("Start Recording", disabled=is_running()):
         st.session_state.proc = subprocess.Popen(
             [sys.executable, "record.py", '-d', arg1, '-rd', arg2, '-v', arg3]
         )
-    if st.button("Stop Recording", disabled=stop_disabled):
+    if st.button("Stop Recording", disabled=not is_running()):
+        st.session_state.proc.wait(timeout=2)
         st.session_state.proc.terminate()  # SIGTERM
         st.session_state.proc = None
