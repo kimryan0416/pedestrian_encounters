@@ -16,7 +16,8 @@ st.title(_TITLE)
 st.markdown(_DESCRIPTION)
 
 # Initialize a session state to control recording via subprocesses
-st.session_state.proc = None
+if "proc" not in st.session_state:
+    st.session_state.proc = None
 def is_running():
     return st.session_state.proc is not None and st.session_state.proc.poll() is None
 start_disabled = is_running()
