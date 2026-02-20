@@ -22,6 +22,9 @@ def is_running():
     p = st.session_state.proc
     return p is not None and p.poll() is None
 
+st.write("proc object:", st.session_state.proc)
+st.write("poll():", st.session_state.proc.poll() if st.session_state.proc else None)
+
 # Create two columns
 col1, col2 = st.columns(2)
 
@@ -31,10 +34,12 @@ with col2:
     st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
    
     if st.button("Run Demo Visualization", disabled=is_running()):
+        st.write("Start button clicked")
         st.session_state.proc = subprocess.Popen([
             sys.executable, 
             "RecordMuse/record/demo.py"
         ])
+        st.write("Spawned PID:", st.session_state.proc.pid)
     
     if st.button("Stop Demo Visualization", disabled=not is_running()):
         st.session_state.proc.wait(timeout=2)
