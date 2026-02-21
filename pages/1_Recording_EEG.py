@@ -3,6 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 from utils.core import find_recording_dirs
+from RecordMuse.processing.convert import mm_to_bluemuse
 
 st.set_page_config(page_title="Recording EEG", page_icon="📈")
 
@@ -24,16 +25,12 @@ def is_running():
     p = st.session_state.proc
     return p is not None and p.poll() is None
 
-st.write("proc object:", st.session_state.proc)
-st.write("poll():", st.session_state.proc.poll() if st.session_state.proc else None)
-
 # Create two columns
-col1, col2 = st.columns(2)
+recording_cols = st.columns(3)
 
-with col2:
+with recording_cols[0]:
     st.header("Demo")
-    st.markdown("You can invoke this operation to just see if your BlueMuse system is working. It produces a set of dynamic graphs that visualize the various data channels recorded by BlueMuse. This is **purely** for visualization and debugging; it doesn't actually record.")
-    st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
+    st.markdown("See if your BlueMuse system is working. This is **purely** for visualization and debugging; it doesn't actually record.")
    
     if st.button("Run Demo Visualization", disabled=is_running()):
         st.session_state.proc = subprocess.Popen([
@@ -48,14 +45,13 @@ with col2:
         st.rerun()
         
 
-with col1:
-    st.header("Recording")
-    st.markdown("You can invoke this operation to actually record data using BlueMuse and your Muse device. You can toggle two separate parameters to control aspects of the recording session. For best results, follow the default settings provided.")
-    st.markdown("_To close this demo, simply close all windows that pop up. Don't try to `Ctrl+C` as this will turn off this Streamlit application too._")
+with recording_cols[1]:
+    st.header("Record")
+    st.markdown("Record data using BlueMuse and your Muse device. For best results, follow the default settings provided.")
 
-    arg1 = st.text_input("Output directory", value=None, placeholder="Leave this blank to create a datetime-stamped output directory")
-    arg2 = st.number_input("Recording duration", value=600, placeholder="How long should the recording last (in seconds)?")
-    arg3 = st.checkbox("Visualize streams (debugging only)", value=False)
+    arg1 = st.text_input("Output directory", value=None, placeholder="Blank = datetime-stamped dir.")
+    arg2 = st.number_input("Recording duration (seconds)", value=600, placeholder="How long should the recording last (in seconds)?")
+    arg3 = st.checkbox("Visualize streams", value=False)
 
     if st.button("Start Recording", disabled=is_running()):
         args = [ sys.executable, "RecordMuse/record/record.py"]
@@ -71,9 +67,21 @@ with col1:
         st.session_state.proc = None
         st.rerun()
 
+with recording_cols[2]:
+    st.header("Convert")
+    st.markdown("Convert from Mind Monitor's formating to BlueMuse's format. _Timestamps may not properly convert._", help="Mind Monitor condenses all recordings into a single row, including EEG, IMU, and Heart Rate. Consequently, many rows may share the same timestamp. This system will try its best to account for this, but you'll likely only get the last recording per timestamp group.")
+
+    arg1 = st.text_input("EEG file from Mind Monitor.", value=None)
+    arg2 = st.text_input("Output directory name (optional)", value=None, placeholder="Blank = automatically generated")
+    arg3 = st.selectbox("Timestamp Group Candidate Selection", options=['Last','First'])
+    
+    if st.button("Convert"):
+        output_dir, eeg_outpath, accel_outpath, gyro_outpath, blinks_outpath = mm_to_bluemuse(arg1, output_dir=arg2, groupby_choice=arg3.lower())
+        st.markdown(f"Converted files saved within `{output_dir}`")
+
 st.divider()
 
-st.header("Pre-existing recordings")
+st.header("Search recordings")
 st.markdown("All recordings are identified with a prefix `[recording]-` to them. You can use this tool to check how many have been identified. You can also control under which root directory you want to check under, if needed.")
 
 recordings = find_recording_dirs(Path('.').resolve())
