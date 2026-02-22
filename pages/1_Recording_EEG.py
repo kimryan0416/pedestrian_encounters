@@ -74,7 +74,7 @@ with recording_cols[2]:
     arg1 = st.text_input("EEG file from Mind Monitor.", value=None)
     arg2 = st.text_input("Output directory name (optional)", value=None, placeholder="Blank = automatically generated")
     arg3 = st.selectbox("Timestamp Group Candidate Selection", options=['Last','First'])
-    
+
     if st.button("Convert"):
         output_dir, eeg_outpath, accel_outpath, gyro_outpath, blinks_outpath = mm_to_bluemuse(arg1, output_dir=arg2, groupby_choice=arg3.lower())
         st.markdown(f"Converted files saved within `{output_dir}`")
@@ -85,11 +85,11 @@ st.header("Search recordings")
 st.markdown("All recordings are identified with a prefix `[recording]-` to them. You can use this tool to check how many have been identified. You can also control under which root directory you want to check under, if needed.")
 
 recordings = find_recording_dirs(Path('.').resolve())
-col3, col4 = st.columns(2)
+col4, col5 = st.columns(2)
 
-with col3:
-    root_dir = st.text_input("Root directory to scan", value=".")
 with col4:
+    root_dir = st.text_input("Root directory to scan", value=".")
+with col5:
     if st.button("Scan for recordings"):
         root = Path(root_dir).resolve()
         if not root.exists():
