@@ -76,7 +76,7 @@ def plot_calibrations(x, start_time, end_time, xlabel:str, cdfs):
 
 def identify_trials(
         src_dir, 
-        eye_src:str, 
+        eye_src:str='eye.csv', 
         #ped_src:str, 
         #eeg_src:str, 
         #bp_src:str, 
