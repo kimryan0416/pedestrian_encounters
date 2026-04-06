@@ -13,3 +13,4 @@ PyQt6
 scipy
 matplotlib
 plotly
+pyyaml
