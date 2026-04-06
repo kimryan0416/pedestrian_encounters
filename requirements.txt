@@ -3,3 +3,13 @@ mne
 scikit-learn
 ruptures
 streamlit
+
+# RecordMuse-specific
+numpy
+pandas
+pylsl
+pyqtgraph
+PyQt6
+scipy
+matplotlib
+plotly
