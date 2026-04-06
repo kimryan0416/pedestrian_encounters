@@ -4,6 +4,10 @@
 
 # Samples
 samples/*
+data/*
 
 # Mac-specific
 **/*.DS_Store
+
+# Generic
+**/*_ignore
