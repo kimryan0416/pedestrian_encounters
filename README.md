@@ -5,7 +5,7 @@ A script package for processing EEG data and Pose Data from VR. For direct use i
 ### Dependencies
 
 - **RecordMuse** ([Github](https://github.com/SimpleDevs-Tools/RecordMuse))
-- **FitCurves** ([Github](git@github.com:volkerp/fitCurves.git))
+- **FitCurves** ([Github](https://github.com/volkerp/fitCurves))
 
 ### Data Samples
 
