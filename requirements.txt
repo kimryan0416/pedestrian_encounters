@@ -4,6 +4,8 @@ nbformat>=4.2.0
 ipywidgets
 scikit-learn
 ruptures
+kneed
+kaleido
 streamlit
 
 # RecordMuse-specific
