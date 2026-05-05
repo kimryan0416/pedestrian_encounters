@@ -4,11 +4,12 @@ Description
 =================================
 This file explicitly focuses on unpacking certain data.
 This includes:
-- unzipping (hence "unpacking") participant `.zip` files
-- extracting (hence "unpacking") timestamp columns from any `.csv` file
-- combining multiple calibration files (hence "unpacking")
+- Unzipping (hence "unpacking") participant `.zip` files
+- Extracting (hence "unpacking") timestamp columns from any `.csv` file
+- Combining multiple calibration files (hence "unpacking")
 - Inferring trials from calibration and eye data (hence "unpacking")
 - Copying and moving offset files (hence "unpacking")
+- Extracting only confederate pedestrians (hence "unpacking")
 """
 
 # =================================
@@ -284,3 +285,42 @@ def offsets(
     # Copy file
     shutil.copy2(in_offset_filepath, out_offset_filepath)
     return True
+
+
+# =================================
+# Deriving confederate agents from pedestrians
+# =================================
+
+def confederates(
+    src_path:str,
+    frame_ts_map:pd.DataFrame = None,
+    outpath:str = None
+) -> pd.DataFrame:
+    # Read raw pedestrian data
+    pdf = pd.read_csv(src_path)
+    # Temporarily, get only the pedestrians that existed at some point on the same sidewalk (by z-position)
+    ydf = pdf[(pdf['Label']=='Pedestrian') & (pdf['pos_y']<=0.0)]
+    # Get the unique IDs of pedestrians
+    confederate_ids = ydf['id'].unique()
+    # Extract only confederate rows
+    df = ydf[ydf['id'].isin(confederate_ids)]
+    # Define the output columns
+    output_columns = ['frame','agent_id','x_pos','y_pos','x_for','y_for']
+    # If a timestamp-frame mapper is provided, then we match
+    if frame_ts_map is not None:
+        df = pd.merge(
+            df, 
+            frame_ts_map,
+            how="left",
+            on="frame"
+        )
+        output_columns = ['unix_ms'] + output_columns
+    # Rename needed columns, drop unecessary ones
+    df = df.rename(columns={ 'pos_x':'x_pos', 'pos_y':'y_pos', 'for_x':'x_for', 'for_y':'y_for', 'id':'agent_id' })
+    df = df[output_columns]
+    # Save plot if prompted; then return the dataframe
+    if outpath is not None:
+        outdir = os.path.split(outpath)[0]
+        os.makedirs(outdir, exist_ok=True)
+        df.to_csv(outpath, index=False)
+    return df
