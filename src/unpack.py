@@ -274,7 +274,7 @@ def trials(
 # =================================
 
 def offsets(
-    pid:str|int
+    pid:str
 ) -> bool:
     in_offset_filepath = f'./data/offsets/{pid}/offsets.csv'
     out_offset_filepath = f'./data/processed/{pid}/offsets.csv'
