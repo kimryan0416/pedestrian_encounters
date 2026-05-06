@@ -172,17 +172,17 @@ def extract_movement_heading(
         np.nan
     )
     # For NaN cases, we create 2 alternatives: persistent (assume from last known movement), and intent (derived from forward direction)
-    df['move_heading_pers'] = df['move_heading'].ffill().bfill()
+    #df['move_heading_pers'] = df['move_heading'].ffill().bfill()
     df['move_heading_intent'] = df['move_heading'].fillna(np.arctan2(df[y_headdir_col], df[x_headdir_col]))
     # Unwrap if needed
     if unwrap:
         df['move_heading'] = np.unwrap(df['move_heading'])
-        df['move_heading_pers'] = np.unwrap(df['move_heading_pers'])
+        #df['move_heading_pers'] = np.unwrap(df['move_heading_pers'])
         df['move_heading_intent'] = np.unwrap(df['move_heading_intent'])
     # Convert the radians to degrees
     if calc_degrees:
         df['move_heading_deg'] = np.degrees(df['move_heading'])
-        df['move_heading_pers_deg'] = np.degrees(df['move_heading_pers'])
+        #df['move_heading_pers_deg'] = np.degrees(df['move_heading_pers'])
         df['move_heading_intent_deg'] = np.degrees(df['move_heading_intent'])
     # Return
     return df
@@ -215,6 +215,45 @@ def infer_movement_relative_dir(
         """
         rel = wrap_pi_vec(df[col] - df['goal_axis'])
         df[f"{col}_rel_goal"] = rel
-        df[f"{col}_toward_goal"] = (1.0 + np.cos(rel)) / 2.0
+    # Return!
+    return df
+
+# =================================
+# Calculating Confederate Proxemics
+# =================================
+
+def calculate_proxemics(
+    move_df:pd.DataFrame,
+    confed_df:pd.DataFrame,
+    radius:float = 5.0,                             # The radius of effect around the user. We normalize to this scale (0:5 -> 0:1).
+    max_distance:float = np.sqrt(5**2 + 10**2)      # The maximum possible distance, to handle edge cases
+) -> pd.DataFrame:
+    # Do a left merge on confeds based on frame, which would be more accurate at this point.
+    df = pd.merge(
+        move_df,
+        confed_df.rename(columns={'unix_ms':'c_unix_ms', 'x_pos':'c_x_pos', 'y_pos':'c_y_pos', 'x_for':'c_x_for', 'y_for':'c_y_for'}),  # ignore frame and agent_id
+        how="left",
+        on="frame"
+    )
+    # We calculate the distance. We set to maximum distance if any are NaN (e.g. there's no confederate agent provided)
+    df["cx-x_diff"] = df["c_x_pos"] - df["x_pos"]
+    df["cy-y_diff"] = df["c_y_pos"] - df["y_pos"]
+    df['distance_to_confederate'] = np.sqrt( df['cx-x_diff']**2 + df['cy-y_diff']**2 )
+    #df['distance_to_confederate'] = df['distance_to_confederate'].fillna(max_distance)
+    # We also calculate the position of the confederate relative to the movement heading of the participant
+    df["_dx"] = np.cos(df["move_heading_intent"])
+    df["_dy"] = np.sin(df["move_heading_intent"])
+    df["cx-x_diff_norm"] = df["cx-x_diff"] / df['distance_to_confederate']
+    df["cy-y_diff_norm"] = df["cy-y_diff"] / df['distance_to_confederate']
+    df["dot"] = df["_dx"] * df["cx-x_diff_norm"] + df["_dy"] * df["cy-y_diff_norm"]
+        # > 0 = confederate in front of the participiant
+        # < 0 confederate is behind the participant
+        # == 0 = confederate is on the side of the participant
+    df["cross"] = df["_dx"] * df["cx-x_diff_norm"] - df["_dy"] * df["cy-y_diff_norm"]
+        # > 0 → confederate is on left
+        # < 0 → confederate is on right
+        # == 0 → perfectly aligned
+    # drop irrelevant rows
+    df = df.drop(columns=['_dx', '_dy', 'cx-x_diff', 'cy-y_diff', 'cx-x_diff_norm', 'cy-y_diff_norm', 'c_unix_ms', 'c_x_pos', 'c_y_pos', 'c_x_for', 'c_y_for'])
     # Return!
     return df

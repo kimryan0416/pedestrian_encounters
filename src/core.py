@@ -76,6 +76,31 @@ def low_pass_smoothing(
     def lowpass(data, cutoff, fs, order=4):
         b, a = butter(order, cutoff / (fs / 2), btype='low')
         return filtfilt(b, a, data)
+
+
+    def lowpass_with_nans(data, cutoff, fs):
+        data = np.asarray(data)
+        result = np.full_like(data, np.nan, dtype=float)
+        valid = ~np.isnan(data)
+        if not np.any(valid): 
+            return result
+
+        # Find contiguous valid segments
+        idx = np.where(valid)[0]
+        splits = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
+        for seg in splits:
+            if len(seg) < 5:  # too short for filtfilt
+                continue
+
+        segment_data = data[seg]
+        try:
+            filtered = lowpass(segment_data, cutoff, fs)
+            result[seg] = filtered
+        except Exception:
+            # fallback: leave as NaN if filtering fails
+            pass
+        # Return
+        return result
     
     # Copy the df to prevent mutation
     df = _df.copy()
@@ -86,8 +111,90 @@ def low_pass_smoothing(
     # Smooth each column provided
     for c in features:
         output_col = c+output_col_suffix if output_col_suffix is not None else c
-        df[output_col] = lowpass(df[c], cutoff=cutoff, fs=fs)
+        df[output_col] = lowpass_with_nans(df[c], cutoff=cutoff, fs=fs)
     # Return!
+    return df
+
+def lowpass_smoothing(
+    _df:pd.DataFrame,
+    features:object,
+    timestamp_col:str = "unix_ms",
+    timestamp_in_milli:bool = True,
+    cutoff:float = 2.0,
+    output_col_suffix:str = None,
+    order:int = 4,
+):
+    def lowpass_with_nans(data, cutoff, fs, order):
+        data = np.asarray(data, dtype=float)
+
+        # Output initialized as NaN
+        result = np.full_like(data, np.nan, dtype=float)
+
+        # Design filter once
+        b, a = butter(order, cutoff / (fs / 2), btype='low')
+
+        valid_mask = ~np.isnan(data)
+
+        if not np.any(valid_mask):
+            return result
+
+        # Find contiguous valid segments
+        idx = np.where(valid_mask)[0]
+        splits = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
+
+        min_len = 3 * order  # safe minimum for filtfilt
+
+        for seg in splits:
+            segment_data = data[seg]
+
+            # If too short → just copy raw data
+            if len(seg) < min_len:
+                result[seg] = segment_data
+                continue
+
+            try:
+                filtered = filtfilt(b, a, segment_data)
+
+                # 🔴 Critical: detect silent NaN failures
+                if np.isnan(filtered).any():
+                    result[seg] = segment_data  # fallback
+                else:
+                    result[seg] = filtered
+
+            except Exception:
+                # Any failure → fallback to raw
+                result[seg] = segment_data
+
+        # 🔴 Safety check: ensure no valid data was lost
+        original_valid = np.sum(valid_mask)
+        result_valid = np.sum(~np.isnan(result))
+
+        if result_valid < original_valid:
+            print(f"⚠️ Warning: lost {original_valid - result_valid} valid points during filtering")
+
+        return result
+
+    # --- MAIN ---
+    df = _df.copy()
+
+    # Compute sampling frequency
+    t = df[timestamp_col].to_numpy()
+    if timestamp_in_milli:
+        t = t / 1000.0
+
+    fs = 1.0 / np.median(np.diff(t))
+
+    # Apply smoothing
+    for c in features:
+        output_col = c + output_col_suffix if output_col_suffix else c
+
+        df[output_col] = lowpass_with_nans(
+            df[c].to_numpy(),
+            cutoff=cutoff,
+            fs=fs,
+            order=order
+        )
+
     return df
 
 # =================================
