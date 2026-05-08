@@ -81,146 +81,209 @@ def trajectories(
     move_df:pd.DataFrame,
     features = [
         {   'title':"Speed", 
-            'axis_title':'m/s',
-            'features':["speed","speed_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'m/s',
+            'x':['unix_ms','unix_ms'],
+            'y':["speed","speed_lowpass"],
             'opacity':[0.25, 1.0],
             'color':['red','blue'],
-            'range':[0.0, 1.5],
+            'yrange':[0.0, 1.5],
+            'width': 500,
             'height':150,
+            'row':1, 'col':1,
         },
         {   'title':"Force", 
-            'axis_title':'m/s/s',
-            'features':["force", "force_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'m/s/s',
+            'x':['unix_ms','unix_ms'],
+            'y':["force", "force_lowpass"],
             'opacity':[0.25, 1.0],
             'color':['red','blue'],
-            'range':[-5.0, 5.0],
+            'yrange':[-5.0, 5.0],
+            'width': 500,
             'height':150,
+            'row':1, 'col':2,
         },
         {   'title':"Intended Heading", 
-            'axis_title':'radians',
-            'features':["move_heading_intent","move_heading_intent_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'radians',
+            'x':['unix_ms','unix_ms'],
+            'y':["move_heading_intent","move_heading_intent_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'], 
-            'range':[-4.25, 4.25],
+            'yrange':[-4.25, 4.25],
+            'width': 500,
             'height':150,
+            'row':2, 'col':1,
         },
         {   'title':"Int. Head. to Goal", 
-            'axis_title':'Dot Prod. (0:1)',
-            'features':["move_heading_intent_rel_goal", "move_heading_intent_rel_goal_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'Dot Prod. (0:1)',
+            'x':['unix_ms','unix_ms'],
+            'y':["move_heading_intent_rel_goal", "move_heading_intent_rel_goal_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'],    
-            'range':[-2, 2],
+            'yrange':[-2, 2],
+            'width': 500,
             'height':150,
+            'row':2, 'col':2,
         },
         {   'title':"Distance to Confederate", 
-            'axis_title':'m',
-            'features':["distance_to_confederate", "distance_to_confederate_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'m',
+            'x':['unix_ms','unix_ms'],
+            'y':["distance_to_confederate", "distance_to_confederate_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'],    
-            'range':[0, 15],
+            'yrange':[0, 20],
+            'width': 500,
             'height':150,
+            'row':3, 'col':1,
         },
         {   'title':"Ahead", 
-            'axis_title':'Dot Prod. (-1:1)',
-            'features':["ahead", "ahead_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'Dot Prod. (-1:1)',
+            'x':['unix_ms','unix_ms'],
+            'y':["ahead", "ahead_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'],    
-            'range':[-1.05, 1.05],
+            'yrange':[-1.05, 1.05],
+            'width': 500,
             'height':150,
+            'row':4, 'col':1,
         },
         {   'title':"Side", 
-            'axis_title':'Dot Prod. (-1:1)',
-            'features':["side", "side_lowpass"], 
+            'xaxis_title':'Time (ms)',
+            'yaxis_title':'Dot Prod. (-1:1)',
+            'x':['unix_ms','unix_ms'],
+            'y':["side", "side_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'],    
-            'range':[-1.05, 1.05],
+            'yrange':[-1.05, 1.05],
+            'width': 500,
             'height':150,
+            'row':4, 'col':2,
+        },
+        {   'title':"Trajectory", 
+            'xaxis_title':'X',
+            'yaxis_title':'Y',
+            'x':['x_pos_lowpass', 'c_x_pos_lowpass'],
+            'y':['y_pos_lowpass', 'c_y_pos_lowpass'], 
+            'opacity':[1.0, 0.5],
+            'color':['speed', 'gray'],    
+            'xrange':[-5.0, 5.0],
+            'yrange':[-4, 0],
+            'width': 500,
+            'height':200,
+            'row':5, 'col':1,
         },
     ],
-    trajectory_height:int = 150,
-    spacing:float = 0.025,
+    spacing:float = 0.075,
     fig_title:str = None,
     show:bool = True,
     outpath:str = None,
-):
-    # Calculate figure height
-    row_pixel_heights = [f["height"] for f in features] + [trajectory_height]
-    n_rows = len(row_pixel_heights)
-    content_height = sum(row_pixel_heights)
-    total_height = content_height / (1 - spacing * (n_rows - 1))
-    row_heights = [h / content_height for h in row_pixel_heights]
+):  
+    # Maximum number of rows and columns
+    n_rows = max([f['row'] for f in features])
+    n_cols = max([f['col'] for f in features])
+    # Calcualte the row heights for the figure grid
+    row_heights_raw = []
+    for r in range(1, n_rows + 1):
+        row_features = [f for f in features if f['row'] == r]
+        max_height = max(f.get('height', 1) for f in row_features)
+        row_heights_raw.append(max_height)
+    content_height = sum(row_heights_raw)                           # The content row heights (not including spacing)
+    total_height = content_height / (1 - spacing * (n_rows - 1))    # content row heights + spacing
+    row_heights = [h / content_height for h in row_heights_raw]     # Ratio of measured height to content height
+    # Same for column widths
+    column_widths_raw = []
+    for c in range(1, n_cols + 1):
+        col_features = [f for f in features if f['col'] == c]
+        max_width = max(f.get('width', 1) for f in col_features)
+        column_widths_raw.append(max_width)
+    content_width = sum(column_widths_raw)
+    total_width = content_width / (1 - spacing * (n_cols - 1))
+    column_widths = [w / content_width for w in column_widths_raw]
+    # Subplot titles
+    titles = []
+    for r in range(1, n_rows + 1):
+        for c in range(1, n_cols + 1):
+            feature = next(
+                ( f for f in features if f['row'] == r and f['col'] == c ),
+                None
+            )
+            titles.append(feature['title'] if feature else "")
     
     # Build figure
     df = move_df.sort_values("unix_ms")
     fig = make_subplots(
         rows=n_rows,
-        cols=1,
+        cols=n_cols,
         shared_xaxes=False,
+        shared_yaxes=False,
         vertical_spacing=spacing,
         row_heights=row_heights,
-        subplot_titles= [f['title'] for f in features] + ["trajectory"]
+        column_widths=column_widths,
+        subplot_titles=titles,
     )
-    fig.update_layout(height=total_height)
 
-    # --- Time series ---
-    t = df["unix_ms"]
-    for i, feature in enumerate(features, start=1):
-        title = feature['title']
-        for f,o,c in zip(feature['features'],feature['opacity'],feature['color']):
+    for feature in features:
+        row = feature['row']
+        col = feature['col']
+        for x,y,o,c in zip(feature['x'], feature['y'], feature['opacity'], feature['color']):
+            # if either x or y are NOT columns in the dataframe, then we skip
+            if x not in df.columns or y not in df.columns:
+                continue    
+            # Unique situation: marker must be defined by whether it's an existing column in our dataframe or not.abs
+            if c in df.columns:
+                # Case 1: This is a column!
+                marker_cfg = dict(
+                    color=df[c],
+                    colorscale=[
+                        [0.0, "rgb(0,0,255)"],
+                        [0.5, "rgb(255,255,0)"],
+                        [1.0, "rgb(255,0,0)"]
+                    ],
+                    cmin=df[c].min(),
+                    cmax=df[c].max(),
+                    size=3,
+                )
+            else:
+                # Case 2: Try to treat as a normal color
+                marker_cfg = dict(
+                    color=c,
+                    size=3
+                )
             fig.add_trace(
                 go.Scatter(
-                    x=t,
-                    y=df[f],
-                    mode="lines",
+                    x=df[x],
+                    y=df[y],
+                    mode="markers",
                     opacity=o,
-                    line=dict(color=c),
-                    name=title,
+                    marker=marker_cfg,
                 ),
-                row=i,
-                col=1
+                row=row,
+                col=col
             )
-        if 'range' in feature:      fig.update_yaxes(row=i, col=1, range=feature['range'])
-        if 'axis_title' in feature: fig.update_yaxes(row=i, col=1, title_text=feature['axis_title'])
-
-    # --- Trajectory ---
-    traj_row = n_rows
-    fig.add_trace(
-        go.Scatter(
-            x=df["x_pos"],
-            y=df["y_pos"],
-            name="trajectory",
-            mode="markers",
-            marker=dict(
-                color=df["speed"],
-                colorscale=[
-                    [0.0, "rgb(0,0,255)"],      # blue (slow)
-                    [0.5, "rgb(255,255,0)"],    # yellow (medium)
-                    [1.0, "rgb(255,0,0)"]       # red (fast)
-                ],
-                cmin=0,
-                cmax=df["speed"].max(),
-                size=3,
-                colorbar=dict(title="Speed")
-            ),
-        ),
-        row=traj_row,
-        col=1
-    )
-
-    fig.update_xaxes(title_text="X", row=traj_row, col=1, range=[-5.0, 5.0])
-    #fig.update_yaxes(title_text="Y", row=traj_row, col=1, range=[-5.0, 2.5])
-    fig.update_yaxes(title_text="Y", row=traj_row, col=1, range=[-4, 0])
+        # Modify tick sizes
+        fig.update_xaxes(row=row, col=col, tickfont=dict(size=8))
+        fig.update_yaxes(row=row, col=col, tickfont=dict(size=8))
+        if 'xrange' in feature:          fig.update_xaxes(row=row, col=col, range=feature['xrange'])
+        if 'yrange' in feature:          fig.update_yaxes(row=row, col=col, range=feature['yrange'])
+        if 'xaxis_title' in feature:    fig.update_xaxes(row=row, col=col, title_text=feature['xaxis_title'], title_font=dict(size=10), title_standoff=5)
+        if 'yaxis_title' in feature:    fig.update_yaxes(row=row, col=col, title_text=feature['yaxis_title'], title_font=dict(size=10), title_standoff=5)
 
     # Optional: keep spatial proportions correct
     #fig.update_yaxes(scaleanchor="x", row=traj_row, col=1)
 
-    # --- Layout ---
+    # Update some latent elements
     if fig_title is None:
         fig_title = f"Trial {df['trial_id'].iloc[0]}"
     fig.update_layout(
-        height=total_height,
         title=fig_title,
-        showlegend=False
+        height=total_height, 
+        width=total_width,
+        showlegend=False,
     )
 
     # Showing
@@ -299,7 +362,7 @@ def trajectories_playback(
             'features':["distance_to_confederate", "distance_to_confederate_lowpass"], 
             'opacity':[0.25, 1.0],
             'color':['red','blue'],    
-            'range':[0, 15],
+            'range':[0, 20],
             'height':150,
         },
         {   'title':"Ahead", 

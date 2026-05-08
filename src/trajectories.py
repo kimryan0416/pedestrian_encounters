@@ -43,11 +43,38 @@ def extract_trajectory(
             'head_direction_z':'y_for'
         })
     
-    # Sort by frame
+    # Sort by frame, and then cleanup any NaNs that still appear
     df = df.sort_values('frame').reset_index(drop=True)
-
-    # cleanup NaN that still happen to remain
     df = df.dropna()
+
+    # Calculate delta time, delta X, and delta Y to calculate velocity and speed
+    df["dt"] = df["unix_ms"].diff() / 1000.0
+    df["dx"] = df["x_pos"].diff()
+    df["dy"] = df["y_pos"].diff()
+    df["x_vel"] = df["dx"] / df["dt"]
+    df["y_vel"] = df["dy"] / df["dt"]
+    df.loc[0, ["dt", "x_vel", "y_vel"]] = 0
+    df["speed"] = np.sqrt(df["x_vel"]**2 + df["y_vel"]**2)
+    
+    # We re-calculate `dx` and `dy` to calculate acceleration
+    df["dx"] = df["x_vel"].diff()
+    df["dy"] = df["y_vel"].diff()
+    df["x_accel"] = df["dx"] / df["dt"]
+    df["y_accel"] = df["dy"] / df["dt"]
+    df.loc[0, ["x_accel", "y_accel"]] = 0
+    # We have to be a bit careful with acceleration, but we can calculate force too
+    df["v_hat_x"] = 0.0
+    df["v_hat_y"] = 0.0
+    valid = df["speed"] > 1e-6
+    df.loc[valid, "v_hat_x"] = df.loc[valid, "x_vel"] / df.loc[valid, "speed"]
+    df.loc[valid, "v_hat_y"] = df.loc[valid, "y_vel"] / df.loc[valid, "speed"]
+    # 3. Tangential acceleration (projection)
+    df["force"] = df["x_accel"] * df["v_hat_x"] + df["y_accel"] * df["v_hat_y"]
+    # Clean first rows (derivative artifacts)
+    #df.loc[:2, ["force"]] = 0
+
+    # Drop useless columns `dx`,`dy`, `v_hat_x`, 'v_hat_y
+    df = df.drop(columns=['dx', 'dy', 'v_hat_x', 'v_hat_y'])
 
     # If a trial dataframe is provided, we merge them
     if trial_df is not None and trial_ts_colname is not None:
@@ -226,12 +253,13 @@ def calculate_proxemics(
     move_df:pd.DataFrame,
     confed_df:pd.DataFrame,
     radius:float = 5.0,                             # The radius of effect around the user. We normalize to this scale (0:5 -> 0:1).
-    max_distance:float = np.sqrt(5**2 + 10**2)      # The maximum possible distance, to handle edge cases
+    max_distance:float = np.sqrt(5**2 + 10**2),     # The maximum possible distance, to handle edge cases
+    keep_confederate_details:bool=True
 ) -> pd.DataFrame:
     # Do a left merge on confeds based on frame, which would be more accurate at this point.
     df = pd.merge(
         move_df,
-        confed_df.rename(columns={'unix_ms':'c_unix_ms', 'x_pos':'c_x_pos', 'y_pos':'c_y_pos', 'x_for':'c_x_for', 'y_for':'c_y_for'}),  # ignore frame and agent_id
+        confed_df.rename(columns={'unix_ms':'c_unix_ms', 'x_pos':'c_x_pos', 'y_pos':'c_y_pos', 'x_for':'c_x_for', 'y_for':'c_y_for', 'move_heading':'c_move_heading'}),  # ignore frame and agent_id
         how="left",
         on="frame"
     )
@@ -243,17 +271,23 @@ def calculate_proxemics(
     # We also calculate the position of the confederate relative to the movement heading of the participant
     df["_dx"] = np.cos(df["move_heading_intent"])
     df["_dy"] = np.sin(df["move_heading_intent"])
+    df["_dd"] = np.sqrt(df['_dx']**2 + df['_dy']**2)
+    df["_dx_norm"] = df["_dx"] / df["_dd"]
+    df["_dy_norm"] = df["_dy"] / df["_dd"]
     df["cx-x_diff_norm"] = df["cx-x_diff"] / df['distance_to_confederate']
     df["cy-y_diff_norm"] = df["cy-y_diff"] / df['distance_to_confederate']
-    df["dot"] = df["_dx"] * df["cx-x_diff_norm"] + df["_dy"] * df["cy-y_diff_norm"]
+    df["dot"] = df["_dx_norm"] * df["cx-x_diff_norm"] + df["_dy_norm"] * df["cy-y_diff_norm"]
         # > 0 = confederate in front of the participiant
         # < 0 confederate is behind the participant
         # == 0 = confederate is on the side of the participant
-    df["cross"] = df["_dx"] * df["cx-x_diff_norm"] - df["_dy"] * df["cy-y_diff_norm"]
+    df["cross"] = df["_dx_norm"] * df["cx-x_diff_norm"] - df["_dy_norm"] * df["cy-y_diff_norm"]
         # > 0 → confederate is on left
         # < 0 → confederate is on right
         # == 0 → perfectly aligned
     # drop irrelevant rows
-    df = df.drop(columns=['_dx', '_dy', 'cx-x_diff', 'cy-y_diff', 'cx-x_diff_norm', 'cy-y_diff_norm', 'c_unix_ms', 'c_x_pos', 'c_y_pos', 'c_x_for', 'c_y_for'])
+    to_drop = ['_dx', '_dy', '_dx_norm', '_dy_norm', '_dd', 'cx-x_diff', 'cy-y_diff', 'cx-x_diff_norm', 'cy-y_diff_norm', 'c_unix_ms']
+    if not keep_confederate_details:
+        to_drop = to_drop + ['c_x_pos', 'c_y_pos', 'c_x_for', 'c_y_for', 'c_move_heading']
+    df = df.drop(columns=to_drop)
     # Return!
     return df

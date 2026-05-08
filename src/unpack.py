@@ -21,6 +21,7 @@ import shutil
 import numpy as np
 import pandas as pd
 import zipfile
+from scipy.optimize import linear_sum_assignment
 # ---------------------
 from . import core
 
@@ -290,6 +291,111 @@ def offsets(
 # =================================
 # Deriving confederate agents from pedestrians
 # =================================
+
+def confederates_2(
+    src_path:str, 
+    frame_ts_map:pd.DataFrame = None,
+    ts_column:str = 'frame',
+    max_head_body_distance:float = 1.0,
+    outpath:str = None,
+) -> pd.DataFrame:
+    
+    # Read raw pedestrian data
+    pdf = pd.read_csv(src_path)
+
+    # Have to merge head and body positions
+    merged_rows = []
+    for timestamp, group in pdf.groupby(ts_column):
+        # Isolate head and body rows
+        heads = (
+            group[group['Label'] == 'PedestrianHead']
+                .dropna(subset=["pos_x", "pos_y"])
+                .copy()
+                .reset_index(drop=True)
+        )
+
+        bodies = (
+            group[group['Label'] == 'Pedestrian']
+                .dropna(subset=["pos_x", "pos_y"])
+                .copy()
+                .reset_index(drop=True)
+        )
+        # If nothing, skip this timestamp
+        if len(heads) == 0 or len(bodies) == 0:
+            continue
+        # Head positions
+        hx = heads["pos_x"].to_numpy()
+        hy = heads["pos_y"].to_numpy()
+        # Body positions
+        bx = bodies["pos_x"].to_numpy()
+        by = bodies["pos_y"].to_numpy()
+        # Build distance matrix
+        dist_matrix = np.sqrt(
+            (hx[:, None] - bx[None, :]) ** 2 +
+            (hy[:, None] - by[None, :]) ** 2
+        )
+        # Safety check
+        if not np.isfinite(dist_matrix).all():
+            print(f"Invalid distance matrix at timestamp {timestamp}")
+            continue
+        # Hungarian assignment (optimal matching)
+        head_indices, body_indices = linear_sum_assignment(dist_matrix)
+        for hi, bi in zip(head_indices, body_indices):
+            # Get distance
+            distance = dist_matrix[hi, bi]
+            # Optional rejection threshold
+            if max_head_body_distance is not None and distance > max_head_body_distance:
+                continue
+            # Get the head and body row
+            head_row = heads.iloc[hi]
+            body_row = bodies.iloc[bi]
+            # Start from head row
+            # At the start, the columns should be: 
+            #   frame, timestamp, id, Label,
+            #   pos_x, pos_y, for_x, for_y,
+            #   deltaTime, frameRateRaw, frameRateSmooth, 
+            #   totalActiveAgents
+            merged = body_row.to_dict()
+            # Rename body orientation columns
+            merged["move_heading"] = np.arctan2(
+                body_row["for_y"],
+                body_row["for_x"]
+            )
+            # Preserve body position separately if desired
+            merged["for_x"] = head_row["for_x"]
+            merged["for_y"] = head_row["for_y"]
+            # Optional debug info
+            merged["head_body_distance"] = distance
+            # Add to merged array
+            merged_rows.append(merged)
+    # Generate new dataframe from merged rows
+    merged_df = pd.DataFrame(merged_rows)
+    # Temporarily, get only the pedestrians that existed at some point on the same sidewalk (by z-position)
+    ydf = merged_df[(merged_df['Label']=='Pedestrian') & (merged_df['pos_y']<=0.0)]
+    # Get the unique IDs of pedestrians
+    confederate_ids = ydf['id'].unique()
+    # Extract only confederate rows
+    df = ydf[ydf['id'].isin(confederate_ids)]
+    # Define the output columns
+    output_columns = ['frame','agent_id','x_pos','y_pos','x_for','y_for', 'move_heading', 'head_body_distance']
+    # If a timestamp-frame mapper is provided, then we match
+    if frame_ts_map is not None:
+        df = pd.merge(
+            df, 
+            frame_ts_map,
+            how="left",
+            on="frame"
+        )
+        output_columns = ['unix_ms'] + output_columns
+    # Rename needed columns, drop unecessary ones
+    df = df.rename(columns={ 'pos_x':'x_pos', 'pos_y':'y_pos', 'for_x':'x_for', 'for_y':'y_for', 'id':'agent_id' })
+    df = df[output_columns]
+    # Save plot if prompted; then return the dataframe
+    if outpath is not None:
+        outdir = os.path.split(outpath)[0]
+        os.makedirs(outdir, exist_ok=True)
+        df.to_csv(outpath, index=False)
+    return df
 
 def confederates(
     src_path:str,
