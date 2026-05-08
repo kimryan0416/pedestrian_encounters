@@ -326,191 +326,414 @@ def trajectories_playback(
     move_df: pd.DataFrame,
     features = [
         {   'title':"Speed", 
-            'axis_title':'m/s',
-            'features':["speed","speed_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],
-            'range':[0.0, 1.5],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'m/s',
+            'legend': ['Raw Speed', 'Smoothed Speed'],
+            'x':['unix_ms','unix_ms'],  'y':["speed","speed_lowpass"],
+            'opacity':[0.25, 1.0],      'color':['red','blue'],
+            'yrange':[0.0, 1.5],
+            'width': 500,               'height':125,
+            'row':1,                    'col':1,
         },
         {   'title':"Force", 
-            'axis_title':'m/s/s',
-            'features':["force", "force_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],
-            'range':[-5.0, 5.0],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'m/s/s',
+            'legend': ['Raw Accel', 'Smoothed Accel'],
+            'x':['unix_ms','unix_ms'],  'y':["force", "force_lowpass"],
+            'opacity':[0.25, 1.0],      'color':['red','blue'],
+            'yrange':[-5.0, 5.0],
+            'width': 500,               'height':125,
+            'row':1,                    'col':2,
         },
         {   'title':"Intended Heading", 
-            'axis_title':'radians',
-            'features':["move_heading_intent","move_heading_intent_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'], 
-            'range':[-4.25, 4.25],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'radians',
+            'legend': ['Raw Heading', 'Smoothed Heading'],
+            'x':['unix_ms','unix_ms'],  'y':["move_heading_intent","move_heading_intent_lowpass"], 
+            'opacity':[0.25, 1.0],      'color':['red','blue'], 
+            'yrange':[-4.25, 4.25],
+            'width': 500,               'height':125,
+            'row':2,                    'col':1,
         },
         {   'title':"Int. Head. to Goal", 
-            'axis_title':'Dot Prod. (0:1)',
-            'features':["move_heading_intent_rel_goal", "move_heading_intent_rel_goal_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],    
-            'range':[-2, 2],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'Dot Prod. (0:1)',
+            'legend': ['Raw Heading to Goal', 'Smoothed Heading to Goal'],
+            'x':['unix_ms','unix_ms'],  'y':["move_heading_intent_rel_goal", "move_heading_intent_rel_goal_lowpass"], 
+            'opacity':[0.25, 1.0],      'color':['red','blue'],    
+            'yrange':[-2, 2],
+            'width': 500,               'height':125,
+            'row':2,                    'col':2,
         },
         {   'title':"Distance to Confederate", 
-            'axis_title':'m',
-            'features':["distance_to_confederate", "distance_to_confederate_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],    
-            'range':[0, 20],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'m',
+            'legend': ['Raw Distance', 'Smoothed Distance'],
+            'x':['unix_ms','unix_ms'],  'y':["distance_to_confederate", "distance_to_confederate_lowpass"], 
+            'opacity':[0.25, 1.0],      'color':['red','blue'],    
+            'yrange':[0, 20],
+            'width': 500,               'height':125,
+            'row':3,                    'col':1,
         },
         {   'title':"Ahead", 
-            'axis_title':'Dot Prod. (-1:1)',
-            'features':["ahead", "ahead_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],    
-            'range':[-1.05, 1.05],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'Dot Prod. (-1:1)',
+            'legend': ['Raw Ahead', 'Smoothed Ahead'],
+            'x':['unix_ms','unix_ms'],  'y':["ahead", "ahead_lowpass"], 
+            'opacity':[0.25, 1.0],      'color':['red','blue'],    
+            'yrange':[-1.05, 1.05],
+            'width': 500,               'height':125,
+            'row':4,                    'col':1,
         },
         {   'title':"Side", 
-            'axis_title':'Dot Prod. (-1:1)',
-            'features':["side", "side_lowpass"], 
-            'opacity':[0.25, 1.0],
-            'color':['red','blue'],    
-            'range':[-1.05, 1.05],
-            'height':150,
+            'xaxis_title':'Time (ms)',  'yaxis_title':'Dot Prod. (-1:1)',
+            'legend': ['Raw Side', 'Smoothed Side'],
+            'x':['unix_ms','unix_ms'],  'y':["side", "side_lowpass"], 
+            'opacity':[0.25, 1.0],      'color':['red','blue'],    
+            'yrange':[-1.05, 1.05],
+            'width': 500,               'height':125,
+            'row':4,                    'col':2,
+        },
+        {   'title':"Trajectory", 
+            'xaxis_title':'X',                          'yaxis_title':'Y',
+            'legend': ["User's Trajectory", "Confederate's Trajectory"],
+            'x':['x_pos_lowpass', 'c_x_pos_lowpass'],   'y':['y_pos_lowpass', 'c_y_pos_lowpass'], 
+            'opacity':[1.0, 0.5],                       'color':['speed', 'gray'],    
+            'xrange':[-7.5, 7.5],                       'yrange':[-4, 0],
+            'width': 450,                               'height':120,
+            'row':5,                                    'col':1,
         },
     ],
-    trajectory_height: int = 150,
-    spacing: float = 0.025,
+    spacing: float = 0.075,
+    playback_ms: int = 50,
     fig_title: str = None,
 ):
+
     df = move_df.sort_values("unix_ms").reset_index(drop=True)
 
-    # --- Layout sizing ---
-    row_pixel_heights = [f["height"] for f in features] + [trajectory_height]
-    n_rows = len(row_pixel_heights)
-    content_height = sum(row_pixel_heights)
+    # =========================================================
+    # GRID SIZE
+    # =========================================================
+
+    n_rows = max(f['row'] for f in features)
+    n_cols = max(f['col'] for f in features)
+
+    # =========================================================
+    # ROW HEIGHTS
+    # =========================================================
+
+    row_heights_raw = []
+    for r in range(1, n_rows + 1):
+        row_features = [f for f in features if f['row'] == r]
+        max_height = max(
+            f.get('height', 1)
+            for f in row_features
+        )
+        row_heights_raw.append(max_height)
+    content_height = sum(row_heights_raw)
     total_height = content_height / (1 - spacing * (n_rows - 1))
-    row_heights = [h / content_height for h in row_pixel_heights]
+    row_heights = [h / content_height for h in row_heights_raw]
+
+    # =========================================================
+    # COLUMN WIDTHS
+    # =========================================================
+
+    column_widths_raw = []
+    for c in range(1, n_cols + 1):
+        col_features = [f for f in features if f['col'] == c ]
+        max_width = max( f.get('width', 1) for f in col_features )
+        column_widths_raw.append(max_width)
+    content_width = sum(column_widths_raw)
+    total_width = content_width / (1 - spacing * (n_cols - 1))
+    column_widths = [w / content_width for w in column_widths_raw]
+
+    # =========================================================
+    # SUBPLOT TITLES
+    # =========================================================
+
+    titles = []
+    for r in range(1, n_rows + 1):
+        for c in range(1, n_cols + 1):
+            feature = next(
+                (
+                    f for f in features
+                    if f['row'] == r and f['col'] == c
+                ),
+                None
+            )
+            titles.append(feature['title'] if feature else "")
+
+    # =========================================================
+    # BUILD FIGURE
+    # =========================================================
 
     fig = make_subplots(
         rows=n_rows,
-        cols=1,
-        shared_xaxes=False,
+        cols=n_cols,
         vertical_spacing=spacing,
+        horizontal_spacing=spacing,
         row_heights=row_heights,
-        subplot_titles=[f['title'] for f in features] + ["trajectory"]
+        column_widths=column_widths,
+        subplot_titles=titles,
+        shared_xaxes=False,
+        shared_yaxes=False,
     )
 
-    # --- INITIAL TRACES (EMPTY) ---
-    trace_map = []  # keeps track of trace ordering
+    # =========================================================
+    # TRACE VISIBILITY MAP
+    # =========================================================
 
-    # Time series traces
-    for i, feature in enumerate(features, start=1):
-        for f, o, c in zip(feature['features'], feature['opacity'], feature['color']):
+    feature_trace_indices = {}
+    trace_idx = 0
+
+    # =========================================================
+    # ADD STATIC TRACES
+    # =========================================================
+
+    cursor_trace_indices = []
+
+    for feature in features:
+        row = feature['row']
+        col = feature['col']
+        title = feature['title']
+        feature_trace_indices[title] = []
+
+        # -----------------------------------------------------
+        # MAIN STATIC TRACES
+        # -----------------------------------------------------
+
+        for x, y, o, c, l in zip(
+            feature['x'],
+            feature['y'],
+            feature['opacity'],
+            feature['color'],
+            feature['legend'],
+        ):
+            if x not in df.columns or y not in df.columns:
+                continue
+
+            # ---------------------------------------------
+            # MARKER / LINE CONFIG
+            # ---------------------------------------------
+
+            if c in df.columns:
+                marker_cfg = dict(
+                    color=df[c],
+                    colorscale="Jet",
+                    cmin=df[c].min(),
+                    cmax=df[c].max(),
+                    size=4,
+                )
+            else:
+                marker_cfg = dict(
+                    color=c,
+                    size=4,
+                )
             fig.add_trace(
                 go.Scatter(
-                    x=[],
-                    y=[],
-                    mode="lines",
+                    x=df[x],
+                    y=df[y],
+                    mode="markers",
                     opacity=o,
-                    line=dict(color=c),
+                    marker=marker_cfg,
+                    name=l,
+                    legendgroup=title,
+                    showlegend=True,
+                ),
+                row=row,
+                col=col
+            )
+            feature_trace_indices[title].append(trace_idx)
+            trace_idx += 1
+
+        # -----------------------------------------------------
+        # CURSOR LINE
+        # -----------------------------------------------------
+
+        if "unix_ms" in df.columns:
+            x0 = df["unix_ms"].iloc[0]
+            fig.add_trace(
+                go.Scatter(
+                    x=[x0, x0],
+                    y=feature.get('yrange', [0, 1]),
+                    mode="lines",
+                    line=dict(
+                        color="black",
+                        dash="dash",
+                        width=1,
+                    ),
                     showlegend=False,
                 ),
-                row=i,
-                col=1
+                row=row,
+                col=col
             )
-            trace_map.append(("timeseries", f))
+            cursor_trace_indices.append(trace_idx)
+            trace_idx += 1
 
-    # Trajectory trace
-    fig.add_trace(
-        go.Scatter(
-            x=[],
-            y=[],
-            mode="markers",
-            marker=dict(
-                color=[],
-                colorscale="Jet",
-                size=4,
-                cmin=0,
-                cmax=df["speed"].max() if "speed" in df else None
-            ),
-            showlegend=False,
+        # -----------------------------------------------------
+        # AXIS FORMATTING
+        # -----------------------------------------------------
+
+        fig.update_xaxes(
+            row=row,
+            col=col,
+            tickfont=dict(size=8)
+        )
+
+        fig.update_yaxes(
+            row=row,
+            col=col,
+            tickfont=dict(size=8)
+        )
+
+        if 'xrange' in feature:         fig.update_xaxes(row=row, col=col, range=feature['xrange'])
+        if 'yrange' in feature:         fig.update_yaxes(row=row, col=col, range=feature['yrange'])
+        if 'xaxis_title' in feature:    fig.update_xaxes(row=row, col=col, title_text=feature['xaxis_title'], title_font=dict(size=10), title_standoff=5)
+        if 'yaxis_title' in feature:    fig.update_yaxes(row=row, col=col, title_text=feature['yaxis_title'], title_font=dict(size=10), title_standoff=5)
+
+    # =========================================================
+    # ANIMATED CURRENT POSITION MARKER
+    # =========================================================
+
+    traj_feature = next(
+        (
+            f for f in features
+            if f['title'] == "Trajectory"
         ),
-        row=n_rows,
-        col=1
+        None
     )
-    trace_map.append(("trajectory", None))
 
-    # --- AXIS FORMATTING ---
-    for i, feature in enumerate(features, start=1):
-        if 'range' in feature:
-            fig.update_yaxes(range=feature['range'], row=i, col=1)
-        if 'axis_title' in feature:
-            fig.update_yaxes(title_text=feature['axis_title'], row=i, col=1)
 
-    # Trajectory axes
-    fig.update_xaxes(title_text="X", row=n_rows, col=1, range=[-5, 5])
-    fig.update_yaxes(title_text="Y", row=n_rows, col=1, range=[-4, 0])
+    current_marker_indices = []
+    if traj_feature is not None:
+        # =====================================================
+        # PRIMARY AGENT MARKER
+        # =====================================================
+        fig.add_trace(
+            go.Scatter(
+                x=[df["x_pos_lowpass"].iloc[0]],
+                y=[df["y_pos_lowpass"].iloc[0]],
+                mode="markers",
+                marker=dict(
+                    color="black",
+                    size=10,
+                    symbol="circle"
+                ),
+                name="Agent",
+                showlegend=False,
+            ),
+            row=traj_feature['row'],
+            col=traj_feature['col']
+        )
+        current_marker_indices.append(trace_idx)
+        trace_idx += 1
+        # =====================================================
+        # CONFEDERATE MARKER
+        # =====================================================
+        fig.add_trace(
+            go.Scatter(
+                x=[df["c_x_pos_lowpass"].iloc[0]],
+                y=[df["c_y_pos_lowpass"].iloc[0]],
+                mode="markers",
+                marker=dict(
+                    color="magenta",
+                    size=10,
+                    symbol="diamond"
+                ),
+                name="Confederate",
+                showlegend=False,
+            ),
+            row=traj_feature['row'],
+            col=traj_feature['col']
+        )
+        current_marker_indices.append(trace_idx)
+        trace_idx += 1
 
-    # --- FRAMES ---
+    # =========================================================
+    # FRAMES
+    # =========================================================
+
     frames = []
-
     for i in range(len(df)):
-        frame_data = []
-
-        # Build traces in EXACT same order
-        for kind, col_name in trace_map:
-            if kind == "timeseries":
-                frame_data.append(
-                    go.Scatter(
-                        x=df["unix_ms"][:i+1],
-                        y=df[col_name][:i+1],
-                    )
+        frame_updates = []
+        # ---------------------------------------------
+        # CURSOR LINES
+        # ---------------------------------------------
+        for feature in features:
+            if "unix_ms" not in df.columns:     continue
+            x0 = df["unix_ms"].iloc[i]
+            frame_updates.append(
+                go.Scatter(
+                    x=[x0, x0],
+                    y=feature.get('yrange', [0, 1]),
                 )
-            elif kind == "trajectory":
-                frame_data.append(
-                    go.Scatter(
-                        x=df["x_pos"][:i+1],
-                        y=df["y_pos"][:i+1],
-                        marker=dict(
-                            color=df["speed"][:i+1] if "speed" in df else None,
-                            colorscale="Jet",
-                            size=4,
-                        ),
-                    )
+            )
+        # ---------------------------------------------
+        # CURRENT TRAJECTORY MARKER
+        # ---------------------------------------------
+        if len(current_marker_indices) > 0:
+            # =====================================================
+            # PRIMARY AGENT
+            # =====================================================
+            frame_updates.append(
+                go.Scatter(
+                    x=[df["x_pos_lowpass"].iloc[i]],
+                    y=[df["y_pos_lowpass"].iloc[i]],
                 )
+            )
+            # =====================================================
+            # CONFEDERATE
+            # =====================================================
+            frame_updates.append(
+                go.Scatter(
+                    x=[df["c_x_pos_lowpass"].iloc[i]],
+                    y=[df["c_y_pos_lowpass"].iloc[i]],
+                )
+            )
 
-        frames.append(go.Frame(data=frame_data, name=str(i)))
-
+        frames.append(
+            go.Frame(
+                data=frame_updates,
+                traces=cursor_trace_indices + current_marker_indices,
+                name=str(i)
+            )
+        )
     fig.frames = frames
 
-    # --- SLIDER ---
+    # =========================================================
+    # SLIDER
+    # =========================================================
+
     sliders = [{
         "steps": [
             {
+                "method": "animate",
+                "label": str(i),
                 "args": [
                     [str(i)],
                     {
-                        "frame": {"duration": 0, "redraw": True},
-                        "mode": "immediate"
+                        "mode": "immediate",
+                        "frame": {
+                            "duration": 0,
+                            "redraw": False
+                        },
+                        "transition": {
+                            "duration": 0
+                        }
                     }
-                ],
-                "label": str(i),
-                "method": "animate"
+                ]
             }
             for i in range(len(frames))
         ],
+
         "x": 0.1,
-        "y": 0,
-        "len": 0.9
+        "y": -0.05,
+        "len": 0.85,
     }]
 
-    # --- PLAY / PAUSE ---
+    # =========================================================
+    # PLAY / PAUSE
+    # =========================================================
+
     updatemenus = [{
         "type": "buttons",
+        "direction": "left",
+        "x": 0.1,
+        "y": -0.12,
         "buttons": [
             {
                 "label": "Play",
@@ -518,8 +741,14 @@ def trajectories_playback(
                 "args": [
                     None,
                     {
-                        "frame": {"duration": 50, "redraw": True},
-                        "fromcurrent": True
+                        "fromcurrent": True,
+                        "frame": {
+                            "duration": playback_ms,
+                            "redraw": False
+                        },
+                        "transition": {
+                            "duration": 0
+                        }
                     }
                 ]
             },
@@ -529,24 +758,44 @@ def trajectories_playback(
                 "args": [
                     [None],
                     {
-                        "frame": {"duration": 0},
-                        "mode": "immediate"
+                        "mode": "immediate",
+                        "frame": {
+                            "duration": 0,
+                            "redraw": False
+                        }
                     }
                 ]
             }
         ]
     }]
 
-    # --- TITLE ---
+    # =========================================================
+    # TITLE
+    # =========================================================
+
     if fig_title is None:
-        fig_title = f"Trial {df['trial_id'].iloc[0]}"
+        if 'trial_id' in df.columns:
+            fig_title = f"Trial {df['trial_id'].iloc[0]}"
+        else:
+            fig_title = "Trajectory Playback"
+
+    # =========================================================
+    # LAYOUT
+    # =========================================================
 
     fig.update_layout(
-        height=total_height,
         title=fig_title,
+        height=total_height,
+        width=total_width,
         sliders=sliders,
         updatemenus=updatemenus,
-        showlegend=False
+        showlegend=True,
+        legend=dict(
+            groupclick="toggleitem"
+        ),
     )
 
+    # =========================================================
+    # SHOW
+    # =========================================================
     fig.show(renderer="browser")

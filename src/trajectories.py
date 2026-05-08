@@ -280,7 +280,7 @@ def calculate_proxemics(
         # > 0 = confederate in front of the participiant
         # < 0 confederate is behind the participant
         # == 0 = confederate is on the side of the participant
-    df["cross"] = df["_dx_norm"] * df["cx-x_diff_norm"] - df["_dy_norm"] * df["cy-y_diff_norm"]
+    df["cross"] = df["_dx_norm"] * df["cy-y_diff_norm"] - df["_dy_norm"] * df["cx-x_diff_norm"]
         # > 0 → confederate is on left
         # < 0 → confederate is on right
         # == 0 → perfectly aligned
