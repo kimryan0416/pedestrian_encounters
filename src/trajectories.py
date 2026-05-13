@@ -198,19 +198,33 @@ def extract_movement_heading(
         np.arctan2(df[y_vel_col], df[x_vel_col]),
         np.nan
     )
-    # For NaN cases, we create 2 alternatives: persistent (assume from last known movement), and intent (derived from forward direction)
-    #df['move_heading_pers'] = df['move_heading'].ffill().bfill()
-    df['move_heading_intent'] = df['move_heading'].fillna(np.arctan2(df[y_headdir_col], df[x_headdir_col]))
+    # For NaN cases, we create an alternative "interp" heading that assumes from last known movement. This is done via interpolation
+    # However, we can't just call `df['move_heading'].interplate()` because interpolate assumes euclidean geometry. But we aren't dealing with euclidean stuff with radians
+    # So we need to decompose into XY first, and then interp there first. 
+    # Keep 
+    theta = df['move_heading']
+    # Project heading onto unit circle
+    sin_t = np.sin(theta)
+    cos_t = np.cos(theta)
+    # Interpolate Cartesian components
+    sin_interp = sin_t.interpolate().ffill().bfill()
+    cos_interp = cos_t.interpolate().ffill().bfill()
+    # Reconstruct angle
+    df['move_heading_interp'] = np.arctan2(
+        sin_interp,
+        cos_interp
+    )
+    #df['move_heading_intent'] = df['move_heading'].fillna(np.arctan2(df[y_headdir_col], df[x_headdir_col]))
     # Unwrap if needed
     if unwrap:
         df['move_heading'] = np.unwrap(df['move_heading'])
-        #df['move_heading_pers'] = np.unwrap(df['move_heading_pers'])
-        df['move_heading_intent'] = np.unwrap(df['move_heading_intent'])
+        df['move_heading_interp'] = np.unwrap(df['move_heading_interp'])
+        #df['move_heading_intent'] = np.unwrap(df['move_heading_intent'])
     # Convert the radians to degrees
     if calc_degrees:
         df['move_heading_deg'] = np.degrees(df['move_heading'])
-        #df['move_heading_pers_deg'] = np.degrees(df['move_heading_pers'])
-        df['move_heading_intent_deg'] = np.degrees(df['move_heading_intent'])
+        df['move_heading_interp_deg'] = np.degrees(df['move_heading_interp'])
+        #df['move_heading_intent_deg'] = np.degrees(df['move_heading_intent'])
     # Return
     return df
 
@@ -219,27 +233,12 @@ def infer_movement_relative_dir(
     heading_cols,
 ) -> pd.DataFrame:
     # Helper function
-    """
-    def wrap_pi(a):
-        if pd.isna(a):
-            return np.nan
-        return (a + np.pi) % (2*np.pi) - np.pi
-    """
     def wrap_pi_vec(a):
         return (a + np.pi) % (2*np.pi) - np.pi
     # Prevent mutation
     df = mov_df.copy()
     # Calculate per heading col
     for col in heading_cols:
-        """
-        df[f"{col}_rel_goal"] = df.apply(lambda row: wrap_pi(row[col] - row['goal_axis']), axis=1)
-        # Note: this will be between 1 and 0. 1 = directly moving toward goal axis, 0 = moving in the opposite direction
-        df[f"{col}_toward_goal"] = np.where(
-            df[f"{col}_rel_goal"].notna(),
-            (1.0 + np.cos(df[f"{col}_rel_goal"])) / 2.0,
-            np.nan
-        )
-        """
         rel = wrap_pi_vec(df[col] - df['goal_axis'])
         df[f"{col}_rel_goal"] = rel
     # Return!
@@ -269,8 +268,8 @@ def calculate_proxemics(
     df['distance_to_confederate'] = np.sqrt( df['cx-x_diff']**2 + df['cy-y_diff']**2 )
     #df['distance_to_confederate'] = df['distance_to_confederate'].fillna(max_distance)
     # We also calculate the position of the confederate relative to the movement heading of the participant
-    df["_dx"] = np.cos(df["move_heading_intent"])
-    df["_dy"] = np.sin(df["move_heading_intent"])
+    df["_dx"] = np.cos(df["move_heading_interp"])
+    df["_dy"] = np.sin(df["move_heading_interp"])
     df["_dd"] = np.sqrt(df['_dx']**2 + df['_dy']**2)
     df["_dx_norm"] = df["_dx"] / df["_dd"]
     df["_dy_norm"] = df["_dy"] / df["_dd"]
