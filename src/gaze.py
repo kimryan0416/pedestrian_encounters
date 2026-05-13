@@ -350,7 +350,6 @@ _NAME_CATEGORY_DICT = {
 }
 
 
-
 # =================================
 # Normalization
 # =================================
@@ -455,13 +454,13 @@ def extract_eye_motion(
     df["gaze_target_id"], uniques = pd.factorize(df["gaze_target_name"])
 
     # 2. Normalize Direction Vectors
-    # Head direction (unit)
+    # Head direction (unit vector)
     df["hdx"], df["hdy"], df["hdz"] = normalize(
         df["head_direction_x"],
         df["head_direction_y"],
         df["head_direction_z"]
     )
-    # Eye relative to head (unit)
+    # Eye relative to head (unit vector)
     df["edx"], df["edy"], df["edz"] = normalize(
         df["gaze_head_rel_direction_x"],
         df["gaze_head_rel_direction_y"],
